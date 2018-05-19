@@ -9,6 +9,12 @@ import imutils
 import time
 import cv2
 
+
+def rectContains(rect, pt):
+    logic = rect[0] < pt[0] < rect[0] + rect[2] and rect[1] < pt[1] < rect[1] + rect[3]
+    return logic
+
+
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-v", "--video", help="path to the video file")
@@ -43,7 +49,6 @@ while True:
     frame = imutils.resize(frame, width=500)
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     gray = cv2.GaussianBlur(gray, (21, 21), 0)
-
     # if the first frame is None, initialize it
     if firstFrame is None:
         firstFrame = gray
@@ -70,23 +75,27 @@ while True:
         # and update the text
         (x, y, w, h) = cv2.boundingRect(c)
         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        text = "Occupied"
+        text = ""
+        if rectContains((80, 280, 400, 440), (x + (w / 2), y + (h / 2))):
+            text = "Open the door"
 
-    # draw the text and timestamp on the frame
-    cv2.putText(frame, "Room Status: {}".format(text), (10, 20),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-    cv2.putText(frame, datetime.datetime.now().strftime("%A %d %B %Y %I:%M:%S%p"),
-                (10, frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1)
+        cv2.rectangle(frame, (80, 280), (400, 440), (100, 100, 100), 2)
+        cv2.ellipse(frame, (240, 360), (160, 80), 0, 0, 360, (0, 0, 255), 2)
+        # draw the text and timestamp on the frame
+        cv2.putText(frame, "Room Status: {}".format(text), (10, 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+        cv2.putText(frame, datetime.datetime.now().strftime("%A %d %B %Y %I:%M:%S%p"),
+                    (10, frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1)
 
-    # show the frame and record if the user presses a key
-    cv2.imshow("Security Feed", frame)
-    cv2.imshow("Thresh", thresh)
-    cv2.imshow("Frame Delta", frameDelta)
-    key = cv2.waitKey(1) & 0xFF
+        # show the frame and record if the user presses a key
+        cv2.imshow("Door Handler", frame)
+        cv2.imshow("Thresh", thresh)
+        cv2.imshow("Frame Delta", frameDelta)
+        key = cv2.waitKey(1) & 0xFF
 
-    # if the `q` key is pressed, break from the lop
-    if key == ord("q"):
-        break
+        # if the `q` key is pressed, break from the lop
+        if key == ord("q"):
+            break
 
 # cleanup the camera and close any open windows
 camera.release()
