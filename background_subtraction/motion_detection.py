@@ -4,19 +4,23 @@ import imutils
 import time
 import cv2
 import numpy as np
-from pykalman import KalmanFilter
 import matplotlib.pyplot as plt
 
 print cv2.__version__
 
 
+# returns the estimated position of the object using last n frames
 def get_next_pos(measurements, n):
     measurements = np.array(measurements)
     if len(measurements) > n:
         x = measurements[-n:, 0]
         y = measurements[-n:, 1]
-        x_speed = (x[-1] - x[-n]) / n
-        y_speed = (y[-1] - y[-n]) / n
+        x_average_loc = sum(x[-n:]) / n
+        y_average_loc = sum(y[-n:]) / n
+        x_speed = (x[-1] - x_average_loc) / 3
+        y_speed = (y[-1] - y_average_loc) / 3
+        # x_speed = (x[-1] - x[-n]) / 2
+        # y_speed = (y[-1] - y[-n]) / 2
         return x[-1] + x_speed, y[-1] + y_speed
     else:
         x = measurements[-1][0]
@@ -24,6 +28,7 @@ def get_next_pos(measurements, n):
         return x, y
 
 
+# checks if a rectangle contains a point
 def rect_contains(rect, pt):
     logic = rect[0] < pt[0] < rect[2] and rect[1] < pt[1] < rect[3]
     return logic
@@ -50,22 +55,26 @@ else:
 firstFrame = None
 frames = []
 avg = None
-
-# TODO move from here(for multi tracking)
+door_locked = False
 temp_measurement = []
+door_status = False
+lock_timer = 0
 
-current_frame_num = 0
-time_stamp = 0
-previous_frame_num = 0
 # loop over the frames of the video
 while True:
-    # grab the current frame and initialize the occupied/unoccupied
-    # text
+
+    # door stabilizer, holds the door open for 50 frames
+    if not door_locked:
+        door_status = False
+    if door_locked:
+        lock_timer += 1
+    if lock_timer > 50:
+        lock_timer = 0
+        door_locked = False
+
     (grabbed, frame) = camera.read()
-    door_status = False
-    current_frame_num += 1
-    # if the frame could not be grabbed, then we have reached the end
-    # of the video
+
+    # if the frame could not be grabbed, then we have reached the end of the video
     if not grabbed:
         break
 
@@ -86,18 +95,6 @@ while True:
     cv2.accumulateWeighted(gray, avg, 0.5)
     frameDelta = cv2.absdiff(gray, cv2.convertScaleAbs(avg))
 
-    # # commented due to better implementation(dynamic first_frame)
-    # # compute the absolute difference between the current frame and
-    # # first frame
-    # frameDelta = cv2.absdiff(firstFrame, gray)
-    # thresh = cv2.threshold(frameDelta, 25, 255, cv2.THRESH_BINARY)[1]
-
-    # # dilate the thresholded image to fill in holes, then find contours
-    # # on thresholded image
-    # thresh = cv2.dilate(thresh, None, iterations=2)
-    # (cnts, _) = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL,
-    #                              cv2.CHAIN_APPROX_SIMPLE)
-
     # threshold the delta image, dilate the thresholded image to fill
     # in holes, then find contours on thresholded image
     thresh = cv2.threshold(frameDelta, 5, 255,
@@ -108,11 +105,11 @@ while True:
     cnts = cnts[0] if imutils.is_cv2() else cnts[1]
 
     # loop over the contours
+    counter = 0
     for c in cnts:
         # if the contour is too small or too big, ignore it
         if cv2.contourArea(c) < args["min_area"]:
             continue
-        # print(cv2.contourArea(c))
         # compute the bounding box for the contour, draw it on the frame,
         # and update the text
         (x, y, w, h) = cv2.boundingRect(c)
@@ -128,51 +125,48 @@ while True:
         #     # predictedCoords = (kf_results[0], kf_results[1])
         #     # print(predictedCoords)
         #     print((x + w) / 2, (y + h) / 2)
-        # draw the predicted motion
 
+        # draw the predicted motion
         predicted_coords = get_next_pos(temp_measurement, 20)
         predicted_coords_long = get_next_pos(temp_measurement, 100)
         cv2.circle(frame, (predicted_coords[0], predicted_coords[1]), 2, (0, 255, 255), 3)
-        cv2.line(frame, (predicted_coords[0], predicted_coords[1]),
-                 (predicted_coords_long[0], predicted_coords_long[1]), [100, 10, 255], 2, 8)
-        # draw a circle in the center of the frame
+        cv2.line(frame, (x + w / 2, y + h / 2), (predicted_coords[0], predicted_coords[1]), (100, 10, 255), 2, 8)
+
+        # draw a circle in the center of the bounding box
         cv2.circle(frame, (x + w / 2, y + h / 2), 2, (255, 0, 0), 3)
-        # utility of the window
-        text = ""
 
         # for real time door handler (using current location)
         # if rect_contains((aoi_x1, aoi_y1, aoi_x2, aoi_y2), (x + w / 2, y + h / 2)):
-        if rect_contains((aoi_x1, aoi_y1, aoi_x2, aoi_y2), (predicted_coords[0], predicted_coords[1])):
-            door_status = True
-            previous_frame_num = time_stamp
-            time_stamp = current_frame_num
-
+        if not door_locked:
+            if rect_contains((aoi_x1, aoi_y1, aoi_x2, aoi_y2),
+                             (predicted_coords[0], predicted_coords[1])):
+                door_status = True
+                door_locked = True
+                counter += 1
+            if counter == 0:
+                door_status = False
     # draw the text and timestamp on the frame
-    if door_status and time_stamp - previous_frame_num > 100:
-        cv2.putText(frame, "Door Status: {}".format("Open"), (10, 20),
+    if door_status:
+        cv2.putText(frame, "Door Status: {}".format('Open'), (10, 20),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    elif not door_status and time_stamp - previous_frame_num > 100:
-        cv2.putText(frame, "Door Status: {}".format("Close"), (10, 20),
+
+    elif not door_status:
+        cv2.putText(frame, "Door Status: {}".format('Close'), (10, 20),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-    cv2.putText(frame, datetime.datetime.now().strftime("%A %d %B %Y %I:%M:%S%p"),
-                (10, frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1)
 
     # define area of interest for the door
     cv2.rectangle(frame, (aoi_x1, aoi_y1), (aoi_x2, aoi_y2), (0, 100, 100), 2)
+    print(door_status)
 
     # show the frame and record if the user presses a key
     cv2.imshow("Door Handler", frame)
     cv2.imshow("Thresh", thresh)
     cv2.imshow("Frame Delta", frameDelta)
-    key = cv2.waitKey(10) & 0xFF
+    key = cv2.waitKey(20) & 0xFF
     # if the `q` key is pressed, break from the lop
     if key == ord("q"):
         break
 
 # cleanup the camera and close any open windows
-temp_measurement = np.array(temp_measurement)
-np.save('./locs.txt', temp_measurement)
-plt.plot(temp_measurement[:, 0], temp_measurement[:, 1], '-o')
-plt.show()
 camera.release()
 cv2.destroyAllWindows()
