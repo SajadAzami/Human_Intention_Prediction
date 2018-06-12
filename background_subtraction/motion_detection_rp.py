@@ -17,8 +17,8 @@ def get_next_pos(measurements, n):
         y = measurements[-n:, 1]
         x_average_loc = sum(x[-n:]) / n
         y_average_loc = sum(y[-n:]) / n
-        x_speed = (x[-1] - x_average_loc) / 3
-        y_speed = (y[-1] - y_average_loc) / 3
+        x_speed = (x[-1] - x_average_loc) / 2
+        y_speed = (y[-1] - y_average_loc) / 2
         # x_speed = (x[-1] - x[-n]) / 2
         # y_speed = (y[-1] - y[-n]) / 2
         return x[-1] + x_speed, y[-1] + y_speed
@@ -40,13 +40,11 @@ ap.add_argument("-v", "--video", help="path to the video file")
 ap.add_argument("-a", "--min-area", type=int, default=500, help="minimum area size")
 args = vars(ap.parse_args())
 
-aoi_x1, aoi_y1, aoi_x2, aoi_y2 = 120, 80, 220, 180
-# aoi_x1, aoi_y1, aoi_x2, aoi_y2 = 300, 300, 400, 450
-
+aoi_x1, aoi_y1, aoi_x2, aoi_y2 = 300, 300, 400, 450
 
 # if the video argument is None, then we are reading from webcam
 if args.get("video", None) is None:
-    camera = cv2.VideoCapture(1)
+    camera = cv2.VideoCapture(0)
     time.sleep(0.25)
 
 # otherwise, we are reading from a video file
@@ -115,13 +113,7 @@ while True:
         # compute the bounding box for the contour, draw it on the frame,
         # and update the text
         (x, y, w, h) = cv2.boundingRect(c)
-        # cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-        epsilon = 0.1 * cv2.arcLength(c, True)
-        approx = cv2.approxPolyDP(c, epsilon, True)
-        hull = cv2.convexHull(c)
-        cv2.drawContours(frame, [hull], -1, (0, 255, 0), 4)
-        # cv2.drawContours(frame, [approx], -1, (0, 255, 0), 4)
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
         # predict motion using KalmanFilter
         temp_measurement.append([x + w / 2, y + h / 2])
@@ -155,21 +147,22 @@ while True:
                 door_status = False
     # draw the text and timestamp on the frame
     if door_status:
-        cv2.putText(frame, "Door Status: {}".format('Open'), (10, 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        print 'door open'
+        # cv2.putText(frame, "Door Status: {}".format('Open'), (10, 20),
+        #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
     elif not door_status:
-        cv2.putText(frame, "Door Status: {}".format('Close'), (10, 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+        print 'door close'
+        # cv2.putText(frame, "Door Status: {}".format('Close'), (10, 20),
+        #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
     # define area of interest for the door
     cv2.rectangle(frame, (aoi_x1, aoi_y1), (aoi_x2, aoi_y2), (0, 100, 100), 2)
-    print(door_status)
 
     # show the frame and record if the user presses a key
-    cv2.imshow("Door Handler", frame)
-    cv2.imshow("Thresh", thresh)
-    cv2.imshow("Frame Delta", frameDelta)
+    # cv2.imshow("Door Handler", frame)
+    # cv2.imshow("Thresh", thresh)
+    # cv2.imshow("Frame Delta", frameDelta)
     key = cv2.waitKey(10) & 0xFF
     # if the `q` key is pressed, break from the lop
     if key == ord("q"):
