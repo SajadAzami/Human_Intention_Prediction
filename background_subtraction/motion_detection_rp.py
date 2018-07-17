@@ -4,7 +4,6 @@ import imutils
 import time
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 
 print cv2.__version__
 
@@ -170,4 +169,3 @@ while True:
 
 # cleanup the camera and close any open windows
 camera.release()
-cv2.destroyAllWindows()
