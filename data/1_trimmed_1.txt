@@ -1,0 +1,4 @@
+--min-area 1200
+aoi_x1, aoi_y1, aoi_x2, aoi_y2 = 300, 300, 400, 450
+
+
