@@ -1,4 +1,4 @@
-# Human_Intention_Prediction
+# Pedestrian Trajectory Prediction on RaspberryPi
 My B.Sc. project at Amirkabir University of Technology, Advisor: Dr. Shiry
 
 
